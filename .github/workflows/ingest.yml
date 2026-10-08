@@ -1,0 +1,31 @@
+name: ingest
+
+on:
+  schedule:
+    - cron: "30 5 * * *"   # raz dziennie (UTC); history z Airly obejmuje 24 h
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Collect measurements
+        env:
+          AIRLY_API_KEY: ${{ secrets.AIRLY_API_KEY }}
+        run: python -m src.ingest collect
+      - name: Commit data
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add data
+          git diff --cached --quiet || git commit -m "data: $(date -u +%F)"
+          git push
