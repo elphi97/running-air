@@ -18,7 +18,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
-OUT = ROOT / "output"
+OUT = ROOT / "docs"   # GitHub Pages serwuje folder docs/
 
 log = logging.getLogger("pipeline")
 
@@ -40,6 +40,7 @@ def cmd_run(args) -> None:
     from src.graph import load_graph, annotate_edges
     from src.routes import generate_routes
     from src.visualize import build_map, export_gpx
+    from src.site import write_index, prune_old
 
     distances = args.km if args.km else DEFAULT_DISTANCES
     OUT.mkdir(exist_ok=True)
@@ -78,12 +79,12 @@ def cmd_run(args) -> None:
 
         # Mapa HTML
         m = build_map(G, routes, sensors_for_map, ORIGIN, date)
-        map_path = OUT / f"map_{km}km_{date}.html"
+        map_path = OUT / f"map_{km:g}km_{date}.html"
         m.save(str(map_path))
         log.info("Mapa zapisana: %s", map_path.name)
 
         # GPX najlepszej trasy
-        gpx_path = OUT / f"best_{km}km_{date}.gpx"
+        gpx_path = OUT / f"best_{km:g}km_{date}.gpx"
         export_gpx(best, G, gpx_path)
 
         results_summary.append({
@@ -96,10 +97,14 @@ def cmd_run(args) -> None:
             "gpx": gpx_path.name,
         })
 
-    # Podsumowanie JSON (przydatne do README / badge)
+    # Podsumowanie JSON + strona główna dla GitHub Pages
     summary_path = OUT / f"summary_{date}.json"
     summary_path.write_text(json.dumps(results_summary, indent=2, ensure_ascii=False))
     log.info("Podsumowanie: %s", summary_path.name)
+    if results_summary:
+        write_index(results_summary, date, OUT)
+        removed = prune_old(OUT, date)
+        log.info("Strona główna: docs/index.html (usunięto %d starych plików)", removed)
 
     if results_summary:
         log.info("\n%-6s %-10s %-10s %-8s %-8s", "km", "długość", "PM2.5", "zieleń", "wynik")
