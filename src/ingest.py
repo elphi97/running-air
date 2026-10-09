@@ -36,11 +36,13 @@ class AirlyClient:
 
     def __init__(self, api_key: str, daily_budget: int):
         self.session = requests.Session()
-        self.session.headers.update({"apikey": api_key, "Accept": "application/json"})
+        self.session.headers.update(
+            {"apikey": api_key, "Accept": "application/json"})
         self.budget = daily_budget
         self.usage_path = DATA / "api_usage.json"
         self.usage: dict[str, int] = (
-            json.loads(self.usage_path.read_text()) if self.usage_path.exists() else {}
+            json.loads(self.usage_path.read_text()
+                       ) if self.usage_path.exists() else {}
         )
 
     @staticmethod
@@ -52,12 +54,14 @@ class AirlyClient:
 
     def _bump(self) -> None:
         self.usage[self._today()] = self.used_today() + 1
-        recent = dict(sorted(self.usage.items())[-30:])  # trzymamy ostatnie 30 dni
+        # trzymamy ostatnie 30 dni
+        recent = dict(sorted(self.usage.items())[-30:])
         self.usage_path.write_text(json.dumps(recent, indent=2))
 
     def get(self, path: str, **params):
         if self.used_today() >= self.budget:
-            raise BudgetExceeded(f"Budżet {self.budget} requestów/dobę wyczerpany")
+            raise BudgetExceeded(
+                f"Budżet {self.budget} requestów/dobę wyczerpany")
         resp = self.session.get(f"{BASE_URL}{path}", params=params, timeout=30)
         self._bump()
         remaining = resp.headers.get("X-RateLimit-Remaining-day")
@@ -103,15 +107,18 @@ def discover(client: AirlyClient, cfg: dict) -> list[dict]:
         }
         for i in items
     ]
-    log.info("Znaleziono %d instalacji w promieniu %s km", len(installations), c["radius_km"])
+    log.info("Znaleziono %d instalacji w promieniu %s km",
+             len(installations), c["radius_km"])
     (DATA / "installations.json").write_text(json.dumps(installations, indent=2))
 
     # rzut na płaszczyznę w km (wystarczająco dokładny dla skali miasta)
     lat0 = np.radians(c["center_lat"])
     xy = np.array(
-        [[i["lng"] * 111.32 * np.cos(lat0), i["lat"] * 110.57] for i in installations]
+        [[i["lng"] * 111.32 * np.cos(lat0), i["lat"] * 110.57]
+         for i in installations]
     )
-    center = np.array([c["center_lng"] * 111.32 * np.cos(lat0), c["center_lat"] * 110.57])
+    center = np.array([c["center_lng"] * 111.32 *
+                      np.cos(lat0), c["center_lat"] * 110.57])
     start = int(np.linalg.norm(xy - center, axis=1).argmin())
     idx = farthest_point_sample(xy, cfg["limits"]["n_sensors"], start)
     selected = [installations[i] for i in idx]
@@ -131,7 +138,8 @@ def parse_measurements(installation_id: int, payload: dict) -> list[dict]:
             continue
         vals = {v["name"]: v["value"] for v in block["values"]}
         caqi = next(
-            (i.get("value") for i in block.get("indexes", []) if i.get("name") == "AIRLY_CAQI"),
+            (i.get("value")
+             for i in block.get("indexes", []) if i.get("name") == "AIRLY_CAQI"),
             None,
         )
         rows.append(
@@ -156,8 +164,8 @@ def save_measurements(df: pd.DataFrame) -> None:
     out_dir = DATA / "measurements"
     out_dir.mkdir(parents=True, exist_ok=True)
     df = df.copy()
-    df["from_dt"] = pd.to_datetime(df["from_dt"], utc=True)
-    df["till_dt"] = pd.to_datetime(df["till_dt"], utc=True)
+    df["from_dt"] = pd.to_datetime(df["from_dt"], utc=True, format="mixed")
+    df["till_dt"] = pd.to_datetime(df["till_dt"], utc=True, format="mixed")
     df["date"] = df["from_dt"].dt.tz_convert(LOCAL_TZ).dt.strftime("%Y-%m-%d")
 
     for date, part in df.groupby("date"):
@@ -185,7 +193,8 @@ def collect(client: AirlyClient, cfg: dict) -> None:
     rows: list[dict] = []
     for inst in selected:
         try:
-            payload = client.get("/measurements/installation", installationId=inst["id"])
+            payload = client.get(
+                "/measurements/installation", installationId=inst["id"])
         except BudgetExceeded as exc:
             log.warning("%s - przerywam, zapisuję to, co mam", exc)
             break
